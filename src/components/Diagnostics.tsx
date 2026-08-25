@@ -1,13 +1,6 @@
 import type { ResolvedTheme } from '../lib/theme.ts';
 import { useAppSelector } from '../store/store.ts';
 
-/**
- * FR-8 asks for errors to be surfaced rather than swallowed.
- *
- * If a tenant config has a bad value, the app quietly uses the default — which
- * is the right behaviour, but it means nobody would ever find out the config
- * was broken. This panel lists exactly which fields were rejected.
- */
 export function Diagnostics({ resolved }: { resolved: ResolvedTheme }) {
   const editCount = useAppSelector((s) => Object.keys(s.app.edits).length);
   const undoDepth = useAppSelector((s) => s.app.undoStack.length);

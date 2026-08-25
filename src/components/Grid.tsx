@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { FixedSizeList, type ListOnScrollProps } from 'react-window';
 import type { RowId } from '../lib/data.ts';
 import {
@@ -22,19 +22,6 @@ interface Props {
   onCommit: (rowId: RowId, value: number) => void;
 }
 
-/**
- * FR-1: the grid.
- *
- * I used react-window for the virtualization. Writing my own was tempting, but
- * getting scroll maths right at 50,000 rows is exactly the kind of thing a
- * well-tested library already does, and I'd rather spend the time on the parts
- * of this brief that are actually unusual (the concurrency and undo).
- *
- * The trick that makes grouping work with a flat list: I flatten the whole
- * group tree into ONE array of visual rows (region header, territory header,
- * data, data, data, next territory…) and let react-window window over that.
- * Collapsing a group just makes the array shorter.
- */
 export function Grid({ height, onStats, onCommit }: Props) {
   const dispatch = useAppDispatch();
   const filters = useAppSelector((s) => s.app.filters);
@@ -49,19 +36,9 @@ export function Grid({ height, onStats, onCommit }: Props) {
   const headerRef = useRef<HTMLDivElement>(null);
   const [flashRow, setFlashRow] = useState<RowId | null>(null);
 
-  // `.has()` lookups happen per row while rendering 50,000-row lists, so these
-  // are built once per render rather than turned into a Set on every row.
   const selected = useMemo(() => new Set(selectedArray), [selectedArray]);
   const collapsedSet = useMemo(() => new Set(collapsed), [collapsed]);
 
-  /**
-   * Rebuild the row model whenever anything it depends on changes.
-   *
-   * `edits` is in the dependency list because an accepted edit changes the
-   * totals. It does mean editing a cell rebuilds the model, which takes a few
-   * ms — acceptable, since it only happens once per accepted edit rather than
-   * per keystroke.
-   */
   const callsOf = useMemo(() => makeCallsOf(edits), [edits]);
 
   const model = useMemo(
@@ -71,12 +48,14 @@ export function Grid({ height, onStats, onCommit }: Props) {
 
   const { visualRows } = model;
 
+  const rowDataRef = useRef({ visualRows, selected, collapsedSet, flashRow, callsOf });
+  rowDataRef.current = { visualRows, selected, collapsedSet, flashRow, callsOf };
+
   useEffect(() => {
     const visibleRows = Math.ceil(height / ROW_HEIGHT);
     onStats(Math.min(visibleRows + 2, visualRows.length), visualRows.length, model.matchCount);
   }, [height, visualRows.length, model.matchCount, onStats]);
 
-  // FR-6: after an undo, scroll to the row that changed and flash it.
   useEffect(() => {
     if (revealRow === null) return;
     const index = findVisualIndex(visualRows, revealRow.rowId);
@@ -91,27 +70,31 @@ export function Grid({ height, onStats, onCommit }: Props) {
     return undefined;
   }, [revealRow, visualRows, dispatch]);
 
-  function handleSelect(rowId: RowId, shiftKey: boolean): void {
-    if (!shiftKey || anchor === null) {
-      dispatch(appActions.toggleRow(rowId));
-      return;
-    }
-    // Shift-click: select every data row between the anchor and this one, in
-    // the order they appear on screen right now.
-    const from = findVisualIndex(visualRows, anchor);
-    const to = findVisualIndex(visualRows, rowId);
-    if (from < 0 || to < 0) {
-      dispatch(appActions.toggleRow(rowId));
-      return;
-    }
-    const [start, end] = from <= to ? [from, to] : [to, from];
-    const inRange: RowId[] = [];
-    for (let i = start; i <= end; i++) {
-      const visual = visualRows[i]!;
-      if (visual.kind === 'data') inRange.push(visual.rowId);
-    }
-    dispatch(appActions.selectRows({ rowIds: inRange, select: true }));
-  }
+  const handleSelect = useCallback(
+    (rowId: RowId, shiftKey: boolean) => {
+      if (!shiftKey || anchor === null) {
+        dispatch(appActions.toggleRow(rowId));
+        return;
+      }
+      // Shift-click: select every data row between the anchor and this one, in
+      // the order they appear on screen right now.
+      const rows = rowDataRef.current.visualRows;
+      const from = findVisualIndex(rows, anchor);
+      const to = findVisualIndex(rows, rowId);
+      if (from < 0 || to < 0) {
+        dispatch(appActions.toggleRow(rowId));
+        return;
+      }
+      const [start, end] = from <= to ? [from, to] : [to, from];
+      const inRange: RowId[] = [];
+      for (let i = start; i <= end; i++) {
+        const visual = rows[i]!;
+        if (visual.kind === 'data') inRange.push(visual.rowId);
+      }
+      dispatch(appActions.selectRows({ rowIds: inRange, select: true }));
+    },
+    [anchor, dispatch],
+  );
 
   function handleScroll(props: ListOnScrollProps): void {
     // react-window only handles vertical scrolling for us. The header sits
@@ -123,59 +106,63 @@ export function Grid({ height, onStats, onCommit }: Props) {
     if (headerRef.current) headerRef.current.style.transform = `translateX(${-left}px)`;
   }
 
-  function renderRow({ index, style }: { index: number; style: React.CSSProperties }) {
-    const visual = visualRows[index] as VisualRow;
-    const rowIndex = index + 2; // +1 for the header row, +1 because aria is 1-based
+  const renderRow = useCallback(
+    ({ index, style }: { index: number; style: React.CSSProperties }) => {
+      const { visualRows, selected, collapsedSet, flashRow, callsOf } = rowDataRef.current;
+      const visual = visualRows[index] as VisualRow;
+      const rowIndex = index + 2; // +1 for the header row, +1 because aria is 1-based
 
-    if (visual.kind === 'data') {
-      return (
-        <div style={style}>
-          <DataRow
-            rowId={visual.rowId}
-            rowIndex={rowIndex}
-            selected={selected.has(visual.rowId)}
-            revealed={flashRow === visual.rowId}
-            calls={callsOf(visual.rowId)}
-            onSelect={handleSelect}
-            onCommit={onCommit}
-          />
-        </div>
-      );
-    }
+      if (visual.kind === 'data') {
+        return (
+          <div style={style}>
+            <DataRow
+              rowId={visual.rowId}
+              rowIndex={rowIndex}
+              selected={selected.has(visual.rowId)}
+              revealed={flashRow === visual.rowId}
+              calls={callsOf(visual.rowId)}
+              onSelect={handleSelect}
+              onCommit={onCommit}
+            />
+          </div>
+        );
+      }
 
-    if (visual.kind === 'region') {
+      if (visual.kind === 'region') {
+        return (
+          <div style={style}>
+            <GroupRow
+              label={visual.label}
+              level={1}
+              totals={visual.totals}
+              collapsed={collapsedSet.has(visual.key)}
+              rowIndex={rowIndex}
+              onToggle={() => dispatch(appActions.toggleGroup(visual.key))}
+            />
+          </div>
+        );
+      }
+
+      const allSelected =
+        visual.rowIds.length > 0 && visual.rowIds.every((id) => selected.has(id));
+
       return (
         <div style={style}>
           <GroupRow
             label={visual.label}
-            level={1}
+            level={2}
             totals={visual.totals}
             collapsed={collapsedSet.has(visual.key)}
             rowIndex={rowIndex}
             onToggle={() => dispatch(appActions.toggleGroup(visual.key))}
+            allSelected={allSelected}
+            onSelectAll={(select) => dispatch(appActions.selectRows({ rowIds: visual.rowIds, select }))}
           />
         </div>
       );
-    }
-
-    const allSelected =
-      visual.rowIds.length > 0 && visual.rowIds.every((id) => selected.has(id));
-
-    return (
-      <div style={style}>
-        <GroupRow
-          label={visual.label}
-          level={2}
-          totals={visual.totals}
-          collapsed={collapsedSet.has(visual.key)}
-          rowIndex={rowIndex}
-          onToggle={() => dispatch(appActions.toggleGroup(visual.key))}
-          allSelected={allSelected}
-          onSelectAll={(select) => dispatch(appActions.selectRows({ rowIds: visual.rowIds, select }))}
-        />
-      </div>
-    );
-  }
+    },
+    [dispatch, handleSelect, onCommit],
+  );
 
   return (
     <div

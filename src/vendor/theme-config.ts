@@ -13,9 +13,8 @@ export interface TenantTheme {
   radius: number;     // px, 0-24
 }
 
-/** Per-field fallback values for invalid or missing config entries (see FR-8). */
 export const DEFAULT_THEME: TenantTheme = {
-  appName: "HCP Data Explorer",
+  appName: "SF HCP Data Explorer",
   primary: "#0B5FA5",
   onPrimary: "#FFFFFF",
   background: "#FFFFFF",

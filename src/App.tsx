@@ -4,6 +4,7 @@ import { Diagnostics } from './components/Diagnostics.tsx';
 import { Footer } from './components/Footer.tsx';
 import { Grid } from './components/Grid.tsx';
 import { Toolbar } from './components/Toolbar.tsx';
+import type { RowId } from './lib/data.ts';
 import { buildRowModel } from './lib/rowModel.ts';
 import { applyTheme, resolveTheme } from './lib/theme.ts';
 import { appActions } from './store/appSlice.ts';
@@ -33,14 +34,10 @@ export function App() {
 
   const resolved = useMemo(() => resolveTheme(tenant), [tenant]);
 
-  // FR-8: switching tenant only rewrites CSS variables. The grid isn't
-  // re-rendered at all, which is why it stays instant with 50,000 rows loaded.
   useLayoutEffect(() => {
     applyTheme(resolved, document.documentElement);
   }, [resolved]);
 
-  // Totals for the footer. Same builder the grid uses, so the numbers can't
-  // disagree with what's on screen.
   const totals = useMemo(() => {
     const model = buildRowModel(filters, sort, new Set(collapsed), makeCallsOf(edits));
     return model.grandTotals;
@@ -48,8 +45,7 @@ export function App() {
 
   useEffect(() => {
     function measure(): void {
-      // Rough: window height minus the toolbar, footer and any open bars.
-      setGridHeight(Math.max(200, window.innerHeight - 150));
+      setGridHeight(Math.max(200, window.innerHeight - 100));
     }
     measure();
     window.addEventListener('resize', measure);
@@ -76,9 +72,12 @@ export function App() {
     setStats({ rendered, total, matches });
   }, []);
 
+  const onCommit = useCallback((rowId: RowId, value: number) => {
+    void commitCalls(rowId, value);
+  }, []);
+
   function changeTenant(next: string): void {
     setTenant(next);
-    // Keep the URL in step so the page can be reloaded or shared.
     const url = new URL(window.location.href);
     url.searchParams.set('tenant', next);
     window.history.replaceState(null, '', url.toString());
@@ -119,7 +118,7 @@ export function App() {
       <Grid
         height={gridHeight}
         onStats={onStats}
-        onCommit={(rowId, value) => void commitCalls(rowId, value)}
+        onCommit={onCommit}
       />
 
       <Footer
@@ -132,7 +131,6 @@ export function App() {
 
       {showDiagnostics ? <Diagnostics resolved={resolved} /> : null}
 
-      {/* Announces validation results, which otherwise only show up as a colour. */}
       <div className="sr-only" role="status" aria-live="polite">
         {message}
       </div>

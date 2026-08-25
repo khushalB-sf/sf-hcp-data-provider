@@ -1,19 +1,8 @@
 import { setValidator } from '../store/validator.ts';
 
-/**
- * A stand-in for the real validator that I can control from a test.
- *
- * The real one waits a random 300-900ms and fails 10% of the time, which makes
- * it impossible to write a test that reliably checks "what happens if this one
- * fails and that one succeeds". This version hands back a promise I resolve or
- * reject myself, so the test decides the order things come back in.
- */
 export interface FakeValidator {
-  /** Every call made so far, in order. */
   calls: { value: number }[];
-  /** Finish one call. Pass 'ok' to accept, or a string to reject with. */
   settle: (index: number, outcome: 'ok' | string) => void;
-  /** Finish all outstanding calls at once. */
   settleAll: (outcome: (value: number, index: number) => 'ok' | string) => void;
 }
 

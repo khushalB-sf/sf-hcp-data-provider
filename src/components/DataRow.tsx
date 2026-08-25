@@ -1,4 +1,4 @@
-import { memo } from 'react';
+import { memo, useRef } from 'react';
 import { getRows, wasString, type RowId } from '../lib/data.ts';
 import { cpi, formatCpi, formatCpiExact, isCpiClamped } from '../lib/cpi.ts';
 import { COLUMNS, GUTTER_WIDTH } from '../lib/rowModel.ts';
@@ -13,18 +13,9 @@ interface Props {
   revealed: boolean;
   calls: number;
   onSelect: (rowId: RowId, shiftKey: boolean) => void;
-  /** Passed in rather than imported, so this component doesn't need to know
-      how a commit actually happens. */
   onCommit: (rowId: RowId, value: number) => void;
 }
 
-/**
- * One HCP row.
- *
- * Wrapped in memo, and it only subscribes to its OWN edit state. Without that,
- * every row re-rendered whenever any cell anywhere finished validating, which
- * during a bulk edit meant a lot of wasted rendering.
- */
 function DataRowInner({
   rowId,
   rowIndex,
@@ -41,6 +32,9 @@ function DataRowInner({
 
   const cpiValue = cpi(calls, row.trx);
 
+  const renderCount = useRef(0);
+  renderCount.current += 1;
+
   return (
     <div
       className={`row data-row${selected ? ' selected' : ''}${revealed ? ' revealed' : ''}`}
@@ -49,6 +43,7 @@ function DataRowInner({
       aria-level={3}
       aria-selected={selected}
       data-rowid={rowId}
+      data-render-count={renderCount.current}
     >
       <div className="cell gutter" style={{ width: GUTTER_WIDTH, paddingLeft: 40 }} role="gridcell">
         <input

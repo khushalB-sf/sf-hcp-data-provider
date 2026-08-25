@@ -9,14 +9,6 @@ const SKIP_LABELS: Record<SkipReason, string> = {
   'not-a-number': 'value is not a number',
 };
 
-/**
- * FR-5: the bulk edit bar.
- *
- * The report shows applied / rejected / skipped, and those three have to add up
- * to the number of rows selected. I added "skipped" after finding out that
- * +10% doesn't change anything for Calls values of 0-4 — that's around 11% of
- * the dataset, so without that number the report looks like rows went missing.
- */
 export function BulkBar() {
   const dispatch = useAppDispatch();
   const selectedCount = useAppSelector((s) => s.app.selected.length);

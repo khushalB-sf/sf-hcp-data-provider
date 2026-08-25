@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { act, render, screen } from '@testing-library/react';
 import { Provider } from 'react-redux';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { appActions } from '../store/appSlice.ts';
@@ -65,5 +65,30 @@ describe('the grid on screen (FR-1)', () => {
     const sorted = headers.find((h) => h.getAttribute('aria-sort') === 'ascending');
     expect(sorted).toBeTruthy();
     expect(sorted!.textContent).toContain('Calls');
+  });
+
+  it("editing one row's cell does not re-render its sibling rows", () => {
+    renderGrid();
+    const rows = Array.from(document.querySelectorAll<HTMLElement>('.data-row'));
+    expect(rows.length).toBeGreaterThan(1);
+
+    const [edited, sibling] = rows;
+    const editedRowId = Number(edited!.dataset.rowid);
+    const before = {
+      edited: Number(edited!.dataset.renderCount),
+      sibling: Number(sibling!.dataset.renderCount),
+    };
+
+    act(() => {
+      store.dispatch(appActions.startPending({ rowId: editedRowId, value: 5, requestId: 1 }));
+    });
+
+    const after = {
+      edited: Number(edited!.dataset.renderCount),
+      sibling: Number(sibling!.dataset.renderCount),
+    };
+
+    expect(after.edited).toBeGreaterThan(before.edited);
+    expect(after.sibling).toBe(before.sibling);
   });
 });

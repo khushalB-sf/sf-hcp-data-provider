@@ -13,15 +13,6 @@ interface Props {
   onSelectAll?: (select: boolean) => void;
 }
 
-/**
- * FR-2: a region or territory header, with its totals.
- *
- * The totals show even when the group is collapsed, which is the point of the
- * requirement — a collapsed group that hides its own numbers isn't much use.
- *
- * The totals come from the same value the cells show (`committed ?? source`),
- * so an edit that's still being validated isn't counted here.
- */
 export function GroupRow({
   label,
   level,

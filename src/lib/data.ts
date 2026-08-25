@@ -1,12 +1,5 @@
 import { generateRows, type HcpRecord } from '../vendor/data-generator.ts';
 
-/**
- * The dataset is generated once and never changed after that.
- *
- * I keep it in a module variable instead of in the store because the store
- * would then hold 50,000 objects that never change, and every state update
- * would make React re-check them for no reason.
- */
 let rows: HcpRecord[] | null = null;
 
 export function getRows(): HcpRecord[] {

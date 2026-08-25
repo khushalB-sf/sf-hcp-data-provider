@@ -33,11 +33,6 @@ export interface AppState {
   staleReplies: number;
 }
 
-/**
- * `selected`/`collapsed` are plain arrays in the store (Immer drafts don't play
- * well with `Set` without extra setup), so components that need `Set` semantics
- * — `.has()`, `.size` — build one locally with `useMemo`. See selectors.ts.
- */
 function createInitialState(): AppState {
   return {
     edits: {},
@@ -131,12 +126,6 @@ const appSlice = createSlice({
       state.redoStack = [];
     },
 
-    /**
-     * Write a list of ops straight into the edits map.
-     *
-     * `fromUndo` marks the cell as changed-but-not-revalidated, because undo
-     * doesn't call the validator — see the comment in history.ts.
-     */
     applyOps: (state, action: PayloadAction<{ ops: EditOp[]; fromUndo: boolean }>) => {
       const { ops, fromUndo } = action.payload;
       for (const op of ops) {
@@ -158,11 +147,6 @@ const appSlice = createSlice({
       state.historyBusy = action.payload;
     },
 
-    /**
-     * After a redo finishes. Only the rows that succeeded go back on the undo
-     * stack, and the rest of the redo stack is thrown away because the app is no
-     * longer in the state those entries expected.
-     */
     pushRedoResult: (state, action: PayloadAction<Command | null>) => {
       if (action.payload !== null) state.undoStack.push(action.payload);
       state.redoStack = [];

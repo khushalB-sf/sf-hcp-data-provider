@@ -1,4 +1,4 @@
-# HCP Data Explorer
+# SF HCP Data Explorer
 
 A grid for 50,000 healthcare provider records — grouped by region and territory
 with live totals, virtualized scrolling, inline editing with async validation,

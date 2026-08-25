@@ -32,10 +32,6 @@ export function Toolbar({
   const [text, setText] = useState('');
   const index = getGroupIndex();
 
-  /**
-   * The input keeps its own value and only tells the store after a pause, so
-   * typing doesn't have to wait for 50,000 rows to be filtered on every letter.
-   */
   useEffect(() => {
     const timer = setTimeout(() => dispatch(appActions.setSearch(text)), SEARCH_DELAY_MS);
     return () => clearTimeout(timer);

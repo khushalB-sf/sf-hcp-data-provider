@@ -9,12 +9,6 @@ interface Props {
   grandTrx: number;
 }
 
-/**
- * FR-1 asks for a visible row count, so here it is.
- *
- * I report the rows in the DOM separately from the total, because that's the
- * number that proves the virtualization is doing its job.
- */
 export function Footer({ renderedRows, totalRows, matchCount, grandCalls, grandTrx }: Props) {
   const pending = useAppSelector((s) => s.app.pendingCount);
   const stale = useAppSelector((s) => s.app.staleReplies);

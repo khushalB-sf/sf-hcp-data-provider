@@ -6,19 +6,9 @@ import { markRejected, markSaved, store } from './store.ts';
 import type { EditOp, SkipReason } from './types.ts';
 import { reasonOf, validate } from './validator.ts';
 
-/**
- * FR-4: commit one cell edit.
- *
- * Order matters here. The cell is marked pending BEFORE the request goes out,
- * so it's locked for the whole time the request is in flight. If I did it the
- * other way round there'd be a gap where a second edit could slip through.
- */
 export async function commitCalls(rowId: RowId, value: number): Promise<void> {
   const state = store.getState().app;
 
-  // A cell that's already validating doesn't accept another edit. I don't queue
-  // it either: with 300-900ms of latency you'd end up with a chain of edits and
-  // no clear answer about what the final value should be if one of them fails.
   if (selectIsLocked(state, rowId)) {
     store.dispatch(appActions.say('That cell is still validating — please wait.'));
     return;
@@ -54,7 +44,6 @@ export async function commitCalls(rowId: RowId, value: number): Promise<void> {
   }
 }
 
-/** How many concurrent validator calls a bulk run is allowed to have going. */
 export const BULK_CONCURRENCY = 100;
 
 export const percentOf = (value: number, percent: number): number =>
@@ -66,13 +55,6 @@ export function cancelBulk(): void {
   store.dispatch(appActions.say('Cancelling — rows already sent will finish on their own.'));
 }
 
-/**
- * FR-5: apply +/-10% to every selected row.
- *
- * Each row is validated on its own, so some can succeed while others fail. The
- * report has to add up: applied + rejected + skipped must equal how many rows
- * were selected, otherwise it looks like work went missing.
- */
 export async function bulkAdjust(percent: number): Promise<void> {
   const state = store.getState().app;
   if (state.bulkProgress !== null) return;
@@ -85,8 +67,6 @@ export async function bulkAdjust(percent: number): Promise<void> {
 
   const label = `${percent > 0 ? '+' : ''}${percent}% Calls`;
 
-  // Work out up front what we're actually going to send. Doing this first means
-  // the numbers in the report are fixed before anything is in flight.
   const targets: { rowId: RowId; from: number | null; to: number }[] = [];
   const skipped: SkipReason[] = [];
 
@@ -101,8 +81,7 @@ export async function bulkAdjust(percent: number): Promise<void> {
       continue;
     }
     const next = percentOf(current, percent);
-    // Surprise I hit while testing: round(v * 1.1) === v for v of 0,1,2,3,4.
-    // That's about 11% of the dataset, so this bucket is not a rare edge case.
+  
     if (next === current) {
       skipped.push('no-change');
       continue;
@@ -118,7 +97,6 @@ export async function bulkAdjust(percent: number): Promise<void> {
   const rejectCounts = new Map<string, number>();
   const abandoned: RowId[] = [];
 
-  // Mark them all pending first, so nothing else can edit them mid-run.
   const requestIds = new Map<RowId, number>();
   for (const target of targets) {
     const requestId = takeRequestId();
@@ -146,8 +124,6 @@ export async function bulkAdjust(percent: number): Promise<void> {
     store.dispatch(appActions.bumpBulkProgress());
   }
 
-  // Run them in batches rather than all at once, so we don't fire 1,000
-  // requests in the same tick.
   for (let i = 0; i < targets.length; i += BULK_CONCURRENCY) {
     if (cancelled) {
       for (let j = i; j < targets.length; j++) abandoned.push(targets[j]!.rowId);
@@ -156,9 +132,6 @@ export async function bulkAdjust(percent: number): Promise<void> {
     await Promise.all(targets.slice(i, i + BULK_CONCURRENCY).map(runOne));
   }
 
-  // If we cancelled, unlock anything we marked pending but never sent, plus
-  // anything still in flight. Those requests will still come back later, and
-  // the request-id check in markSaved/markRejected throws them away.
   for (const target of targets) {
     if (selectIsLocked(store.getState().app, target.rowId)) {
       store.dispatch(appActions.releasePending({ rowId: target.rowId }));
@@ -204,9 +177,6 @@ export async function bulkAdjust(percent: number): Promise<void> {
     }),
   );
 
-  // One undo entry for the whole operation, holding only the rows that worked.
-  // If none worked there's no entry at all — an undo that does nothing would
-  // just be confusing.
   if (applied.length > 0) {
     store.dispatch(appActions.pushCommand({ kind: 'bulk', label, ops: applied }));
   }

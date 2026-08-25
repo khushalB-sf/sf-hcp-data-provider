@@ -18,13 +18,6 @@ interface Props {
 
 const ICONS = { pending: '⏳', saved: '✓', rejected: '✕' };
 
-/**
- * FR-4: the editable Calls cell.
- *
- * Three visual states, and each one has an icon as well as a colour so it
- * still works if you can't tell the colours apart. A value put back by undo
- * renders as a plain, unbadged number — same as a cell nobody has touched.
- */
 export function CallsCell(props: Props) {
   const { value, wasString, state, draft, width, onCommit, onCancel } = props;
   const inputRef = useRef<HTMLInputElement>(null);
